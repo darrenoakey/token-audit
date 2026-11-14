@@ -1,0 +1,12 @@
+[tool.ruff]
+line-length = 120
+src = ["src"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["audit", "audit_api", "audit_analysis"]
+
+[tool.pytest.ini_options]
+testpaths = ["src"]
+python_files = ["*_test.py"]
+addopts = "-ra -W error"
+timeout = 30

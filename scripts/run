@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+PYTHON = ROOT / ".venv/bin/python"
+if not PYTHON.exists():
+    subprocess.run([sys.executable, "-m", "venv", str(ROOT / ".venv")], check=True)
+    subprocess.run(
+        [
+            str(PYTHON),
+            "-m",
+            "pip",
+            "install",
+            "-q",
+            "-r",
+            str(ROOT / "requirements.txt"),
+        ],
+        check=True,
+    )
+CODE = f"import sys; sys.path.insert(0, {str(ROOT / 'src')!r}); from audit import main; raise SystemExit(main())"
+os.execv(str(PYTHON), [str(PYTHON), "-c", CODE, *sys.argv[1:]])
