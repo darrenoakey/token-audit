@@ -17,8 +17,9 @@ work requires research, design, debugging or coding.
 
 Do not use `sed -n`, `cat` or `grep` for source or text reads. Use
 `file-skim FILE:START-END`, `file-skim --grep REGEX -C N FILE...` or `file-skim --tail N FILE...` (last N numbered lines; replaces raw `tail -n N FILE`)
-for reads, and `~/bin/rg-skim PATTERN PATH...` for tree searches. To find which files
-contain a pattern before reading them, the native `grep` tool with `output: "files"`
+for reads, and `~/bin/rg-skim PATTERN PATH...` for tree searches. When several targets are known, pass them together to one `file-skim` invocation (it accepts multiple files and apportions a shared budget via `--max-total-chars`); use `file-skim --grep REGEX -C N FILE...` to get matches with context across several files in one call instead of a search followed by reads. Do not re-read an unchanged file/range: retain its numbered excerpt and drill only into exact omitted ranges. This cuts repeated helper round trips while preserving numbered evidence and explicit truncation.
+
+To find which files contain a pattern before reading them, the native `grep` tool with `output: "files"`
 (daz-agentic PR #997, released v488) returns each matching file with its exact match
 count and no line text in one call. Measured on the audited pattern (internal/api):
 content mode 47,640 chars, files mode 1,870 chars. Use
