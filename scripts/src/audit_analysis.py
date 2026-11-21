@@ -83,7 +83,9 @@ def size(value):
 IMAGE_PLACEHOLDER = "[image]"
 IMAGE_PLACEHOLDER_CHARS = len(IMAGE_PLACEHOLDER)
 # Matches the serialized image block prefix (escaped or plain) and its base64 payload.
-IMAGE_DATA = re.compile(r'(\\?"type\\?"\s*:\s*\\?"image\\?".{0,200}?\\?"data\\?"\s*:\s*\\?")[A-Za-z0-9+/=]{64,}', re.DOTALL)
+IMAGE_DATA = re.compile(
+    r'(\\?"type\\?"\s*:\s*\\?"image\\?".{0,200}?\\?"data\\?"\s*:\s*\\?")[A-Za-z0-9+/=]{64,}', re.DOTALL
+)
 
 
 def content_block_size(block):
