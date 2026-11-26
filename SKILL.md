@@ -16,14 +16,15 @@ work requires research, design, debugging or coding.
 ## Reading and searching during a token audit
 
 Do not use `sed -n`, `cat` or `grep` for source or text reads. Use
-`file-skim FILE:START-END`, `file-skim --grep REGEX -C N FILE...` or `file-skim --tail N FILE...` (last N numbered lines; replaces raw `tail -n N FILE`)
-for reads, and `~/bin/rg-skim PATTERN PATH...` for tree searches. To find which files
-contain a pattern before reading them, the native `grep` tool with `output: "files"`
+`file-skim FILE:START-END`, `file-skim --grep REGEX -C N FILE...` or `file-skim --tail N FILE...` (last N numbered lines; replaces raw `tail -n N FILE`) or `file-skim --head N FILE...` (first N numbered lines; replaces raw `head -n N FILE`, same budget and drill-down as `FILE:1-N`)
+for reads, and `~/bin/rg-skim PATTERN PATH...` for tree searches. When several targets are known, pass them together to one `file-skim` invocation (it accepts multiple files and apportions a shared budget via `--max-total-chars`); use `file-skim --grep REGEX -C N FILE...` to get matches with context across several files in one call instead of a search followed by reads. Do not re-read an unchanged file/range: retain its numbered excerpt and drill only into exact omitted ranges. This cuts repeated helper round trips while preserving numbered evidence and explicit truncation.
+
+To find which files contain a pattern before reading them, the native `grep` tool with `output: "files"`
 (daz-agentic PR #997, released v488) returns each matching file with its exact match
 count and no line text in one call. Measured on the audited pattern (internal/api):
 content mode 47,640 chars, files mode 1,870 chars. Use
 For GitHub Actions and release checks use `~/bin/gh-ci-skim -R OWNER/REPO pr N|run ID|runs|releases` (one VERDICT with failed-step evidence and a saved cleaned log) instead of repeated `gh run view`, `gh run list`, `gh pr view` or `gh release list` calls. The audit counts those raw calls as `shell:gh run view` etc. against `shell:gh-ci-skim` adoption.
-`~/bin/remote-probe HOST -p 'LABEL::CMD' ...` for read-only checks on a remote host,
+`~/bin/remote-probe HOST --cmd 'CMD' --cmd 'CMD' ...` (bare commands, labelled c1, c2, ...; or `-p 'LABEL::CMD'` for named probes) for read-only checks on a remote host,
 not one ssh call per probe. Each route returns bounded output with exact drill-down.
 For one remote command whose output may be large, use `~/bin/shell-skim -- ssh HOST 'CMD'`.
 For a single HTTP(S) URL, use `~/bin/web-skim URL` instead of `curl URL`: it reports
@@ -54,7 +55,17 @@ with an exact OMITTED drill-down. Adoption after the change is measured by the n
 ```
 
 Use the ranked report and its conversation/event references to inspect the
-largest operations. Do not paginate and print raw transcripts manually.
+largest operations. Do not paginate and print raw transcripts manually. For
+large multi-file inspections, do not default to a single `read {paths}` batch:
+its per-file allowance can produce several near-limit excerpts in one response.
+For broad Markdown surveys across 2-4 known files, use one `read {paths}`
+call with `max_chars` around 2000 per file; this keeps a four-file batch near
+8000 chars while retaining exact per-file omission drill-downs. Widen only
+relevant files afterward. For unknown file sets, use native grep `output:
+"files"` to find candidates first. Preserve omission and failure evidence.
+Repeated
+`board_tasks` discovery calls should similarly use a single read/targeted lookup
+when task state is not changing.
 `~/.claude/skills/token-audit` aliases the same installed skill directory.
 
 The report includes tool and operation rankings, expensive three-call windows,
@@ -107,7 +118,7 @@ estimates; never report projected savings as measured savings.
   CAD/config models. Shipped in daz-agentic PR #1402 (pending the Apple notary gate) and local ~/bin
   commit 194e600; the installed agent-PATH binary changes only after #1402 publishes.
 
-## Read-family commands: 4,000-character view (daz-agentic PR #1399, pending publication)
+## Read-family commands: 4,000-character view (daz-agentic PR #1399, published v901)
 
 When the last stage of a bash command is a raw read (`cat`, `sed`, `head`, `tail`, `grep`, `rg`) or
 `git log`, `git diff`, `git show` or `git status`, the bash result is capped at 4,000 characters instead of 16 KB.
@@ -115,8 +126,7 @@ The head-and-tail view, the omitted-range notice and the `Full output:` path are
 still works. Measured (chars, real command in the agentd3 repo): `git log -p -n 12 | head -n 400` printed 20,367
 raw characters and now returns a 4,958-character view. This is a chars/4 proxy, not billed usage. Before this
 change, an oversized read-family result could enter context at about 16 KB. Adoption is measured by the audit's
-`Helper adoption:` line and the `avoidable_proxy` values, not assumed. Until PR #1399 is installed, the old
-16 KB behavior still applies; check `agentd3-cli version` before relying on this.
+`Helper adoption:` line and the `avoidable_proxy` values, not assumed. PR #1399 merged as 06f0632d7 and published as v901 (installed build f2a9f4a on the audited Mac); a raw `cat` of a 30,456-char file returned a 3.9 KB head-and-tail view with an OMITTED drill-down. Conversations started before v901 still show the old 16 KB behaviour in the audit, so adoption after v901 is not yet measured. Check `agentd3-cli version` (v901 or later) before relying on this; older builds still return the 16 KB view.
 
 ## Sleep arms: bounded repeat confirmation (daz-agentic PR #1099, installed v587)
 
@@ -277,7 +287,7 @@ Adoption cohort for the git status note: `--started-after 2026-11-11T21:39:00+00
    output in a log and returns the exit status, bounded head/tail and drill-down ranges.
    For several read-only checks on one remote host (the audited disk-growth diagnosis
    made 314 separate ssh calls, 110 with identical argument shapes), use
-   `~/bin/remote-probe HOST -p 'LABEL::CMD' ...` (or a LABEL::CMD file): one ssh round
+   `~/bin/remote-probe HOST --cmd 'CMD' --cmd 'CMD' ...` (or `-p 'LABEL::CMD'`, or a LABEL::CMD file): one ssh round
    trip, each probe reported with exit status, bounded head and exact drill-down via
    `--show LOG LABEL`. See the `remote` skill.
    Measured on a real spark ssh log read: 157,389 raw chars fell to a 6,684-char
@@ -372,8 +382,10 @@ Adoption cohort for the git status note: `--started-after 2026-11-11T21:39:00+00
    read outputs (17-26k chars each, conv-178ce29ab3ef579f:67/70/73/149/257 among
    them): a wide survey of long documents at `max_chars` 10-12k legitimately fills
    the batch cap; judge those calls against the section relevance of what was
-   surveyed, not as raw dumps, and reach for `md-context QUERY` or `--outline`
-   when only part of each file is needed. `read:batch` also counts as bounded
+   surveyed, not as raw dumps. For surveys of more than four Markdown files, use
+   `~/bin/md-context --index QUERY FILE...`, then query only relevant sections;
+   this returns heading/line references before section bodies and avoids sending
+   whole-document excerpts into context. `read:batch` also counts as bounded
    adoption in `Helper adoption:` (that sample: 14 batch reads, bounded_share
    0.032 -> 0.047). Measure the fix's adoption by the next audit's `read:other`
    ranking: true read:other is now only single-file reads of non-listed extensions.

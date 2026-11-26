@@ -214,15 +214,15 @@ def test_git_skim_is_counted_against_read_only_git_calls():
 # live analysis
 # Cross-check real result envelopes and every ranked total against the fetched events.
 def test_live_analysis_and_missing_result_coverage():
-    # Select a real conversation containing an MCP content envelope, rather
-    # than assuming whichever conversation finished most recently has one.
-    # Content envelopes are older than the newest runs, so search a wide recent window.
+    # Select the most recent completed conversation that made tool calls. The live recorder
+    # stores MCP results unwrapped, so the live window may hold no content envelope; the
+    # content-envelope path is asserted deterministically by the output_size unit tests.
     events, rows, records = [], [], []
     for candidate in api.conversations(BASE, 100, ""):
         detail = api.detail(BASE, candidate["id"])
         events = api.events(BASE, candidate["id"], detail["last_seq"])
         rows, issues, records = analysis.calls(candidate["id"], events)
-        if any(row["output_basis"] == "content" for row in rows):
+        if rows:
             break
     assert rows and records
     tool_issues = {key: value for key, value in issues.items() if key != "turn_usage_missing"}
@@ -240,10 +240,15 @@ def test_live_analysis_and_missing_result_coverage():
     groups = analysis.ranking(rows, "tool", 100)
     assert sum(group["estimated_tokens"] for group in groups) == sum(row["estimated_tokens"] for row in rows)
     assert groups == sorted(groups, key=lambda row: (-row["estimated_tokens"], row["label"]))
-    row = next(row for row in rows if row["output_basis"] == "content")
-    end = next(event for event in events if event["seq"] == row["end_event"])
-    decoded = json.loads(end["data"]["output"])
-    assert row["output_chars"] == sum(analysis.size(block.get("text", block)) for block in decoded["content"])
+    # Every live content envelope that is present must match its recorded event.
+    for content in rows:
+        if content["output_basis"] != "content" or content["end_event"] is None:
+            continue
+        end = next(event for event in events if event["seq"] == content["end_event"])
+        decoded = json.loads(end["data"]["output"])
+        assert content["output_chars"] == sum(analysis.size(block.get("text", block)) for block in decoded["content"])
+    # Removing a real terminal event must add exactly one gap and leave that call's output unknown.
+    row = next(row for row in rows if row["end_event"] is not None)
     retained = [event for event in events if event["seq"] != row["end_event"]]
     incomplete, coverage, _ = analysis.calls(row["conversation"], retained)
     # The removed terminal adds one gap on top of the real unpaired calls already in the stream.
